@@ -22,7 +22,7 @@ async def generate_image(request: Request):
         # 使用最新的图像生成模型
         # 注意：模型名称需根据你账号权限调整，通常为 imagen-3.0-generate-001 或 gemini-2.0-flash 等
         response = client.models.generate_content(
-            model="imagen-3.0-generate-001", 
+            model="gemini-2.5-flash-image", 
             contents=prompt
         )
 
