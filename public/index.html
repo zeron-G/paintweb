@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>Nano Banana 画图助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-yellow-50 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <h1 class="text-3xl font-bold text-yellow-600 mb-6 flex items-center gap-2">
+            🍌 Nano Banana
+        </h1>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Gemini API Key</label>
+                <input type="password" id="apiKey" class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="AIza...">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">提示词 (Prompt)</label>
+                <textarea id="prompt" class="w-full mt-1 p-2 border rounded-lg h-24 focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="描述你想画的内容..."></textarea>
+            </div>
+
+            <button onclick="sendRequest()" id="btn" class="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 rounded-lg transition">
+                生成图片
+            </button>
+        </div>
+
+        <div id="result" class="mt-6 text-center"></div>
+    </div>
+
+    <script>
+        async function sendRequest() {
+            const apiKey = document.getElementById('apiKey').value;
+            const prompt = document.getElementById('prompt').value;
+            const btn = document.getElementById('btn');
+            const resultDiv = document.getElementById('result');
+
+            if (!apiKey || !prompt) return alert("请完整填写！");
+
+            btn.disabled = true;
+            btn.innerText = "生成中...";
+            resultDiv.innerHTML = '<div class="animate-pulse text-gray-500">AI 正在作画...</div>';
+
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey, prompt })
+                });
+                const data = await res.json();
+
+                if (data.predictions && data.predictions[0].bytesBase64Encoded) {
+                    const base64 = data.predictions[0].bytesBase64Encoded;
+                    resultDiv.innerHTML = `<img src="data:image/png;base64,${base64}" class="rounded-lg shadow-md w-full">`;
+                } else {
+                    resultDiv.innerHTML = `<p class="text-red-500">错误: ${data.error || '模型不支持或 Key 无效'}</p>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<p class="text-red-500">请求失败</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "生成图片";
+            }
+        }
+    </script>
+</body>
+</html>
