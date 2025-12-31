@@ -2,46 +2,57 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>Nano Banana 画图助手</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nano Banana - AI Painter</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-yellow-50 min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <h1 class="text-3xl font-bold text-yellow-600 mb-6 flex items-center gap-2">
-            🍌 Nano Banana
-        </h1>
-        
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700">Gemini API Key</label>
-                <input type="password" id="apiKey" class="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="AIza...">
-            </div>
+<body class="bg-zinc-900 text-zinc-100 min-h-screen p-6">
+    <div class="max-w-xl mx-auto space-y-6">
+        <header class="text-center py-8">
+            <h1 class="text-4xl font-black text-yellow-400">🍌 NANO BANANA</h1>
+            <p class="text-zinc-400 mt-2">基于 Google Imagen 的私有画图工具</p>
+        </header>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700">提示词 (Prompt)</label>
-                <textarea id="prompt" class="w-full mt-1 p-2 border rounded-lg h-24 focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="描述你想画的内容..."></textarea>
-            </div>
+        <div class="bg-zinc-800 p-6 rounded-2xl border border-zinc-700 shadow-2xl">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Google API Key</label>
+                    <input type="password" id="apiKey" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 outline-none focus:border-yellow-400 transition" placeholder="在此粘贴你的密钥...">
+                </div>
 
-            <button onclick="sendRequest()" id="btn" class="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 rounded-lg transition">
-                生成图片
-            </button>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">描述内容</label>
+                    <textarea id="prompt" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 outline-none focus:border-yellow-400 transition h-32" placeholder="描述一个未来主义的霓虹香蕉..."></textarea>
+                </div>
+
+                <button onclick="draw()" id="btn" class="w-full bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-black py-4 rounded-xl transition-all transform active:scale-95">
+                    立即生成图片
+                </button>
+            </div>
         </div>
 
-        <div id="result" class="mt-6 text-center"></div>
+        <div id="display" class="relative group">
+            </div>
     </div>
 
     <script>
-        async function sendRequest() {
+        // 初始化：从本地读取 Key
+        document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
+
+        async function draw() {
             const apiKey = document.getElementById('apiKey').value;
             const prompt = document.getElementById('prompt').value;
             const btn = document.getElementById('btn');
-            const resultDiv = document.getElementById('result');
+            const display = document.getElementById('display');
 
-            if (!apiKey || !prompt) return alert("请完整填写！");
+            if (!apiKey || !prompt) return alert('请检查 Key 和描述');
+
+            // 保存 Key 到本地供下次使用
+            localStorage.setItem('gemini_key', apiKey);
 
             btn.disabled = true;
-            btn.innerText = "生成中...";
-            resultDiv.innerHTML = '<div class="animate-pulse text-gray-500">AI 正在作画...</div>';
+            btn.innerText = '正在接入 Google AI...';
+            display.innerHTML = '<div class="h-64 flex items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-700 rounded-2xl italic">AI 正在根据您的指令构图...</div>';
 
             try {
                 const res = await fetch('/api/generate', {
@@ -51,17 +62,16 @@
                 });
                 const data = await res.json();
 
-                if (data.predictions && data.predictions[0].bytesBase64Encoded) {
-                    const base64 = data.predictions[0].bytesBase64Encoded;
-                    resultDiv.innerHTML = `<img src="data:image/png;base64,${base64}" class="rounded-lg shadow-md w-full">`;
+                if (data.image) {
+                    display.innerHTML = `<img src="data:image/png;base64,${data.image}" class="w-full rounded-2xl shadow-2xl border-4 border-zinc-800">`;
                 } else {
-                    resultDiv.innerHTML = `<p class="text-red-500">错误: ${data.error || '模型不支持或 Key 无效'}</p>`;
+                    display.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-500/50 text-red-400 rounded-lg text-sm">${data.error}</div>`;
                 }
             } catch (e) {
-                resultDiv.innerHTML = `<p class="text-red-500">请求失败</p>`;
+                display.innerHTML = '<div class="text-red-500 text-center">网络连接错误</div>';
             } finally {
                 btn.disabled = false;
-                btn.innerText = "生成图片";
+                btn.innerText = '立即生成图片';
             }
         }
     </script>
