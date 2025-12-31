@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from google import genai
-from google.genai import types # 引入 types 以便构建多模态输入
+from google.genai import types
 import base64
 import io
 from PIL import Image
@@ -13,65 +13,67 @@ async def generate_image(request: Request):
     try:
         data = await request.json()
         api_key = data.get("apiKey")
-        prompt = data.get("prompt")
-        ref_image_b64 = data.get("image") # 获取前端传来的参考图 Base64
+        user_prompt = data.get("prompt")
+        ref_image_b64 = data.get("image") # 获取前端传来的 Base64
 
         if not api_key:
             return JSONResponse({"error": "请输入 API Key"}, status_code=400)
 
-        # 初始化客户端
-        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
-
-        # 构建输入内容 contents
-        # 基础是提示词
-        contents_payload = [prompt]
-
-        # 如果有参考图，处理图片
+        # 1. 处理参考图
+        pil_image = None
         if ref_image_b64:
-            # 1. 去掉前端传来的 data:image/png;base64, 前缀（如果有）
+            # 清理 base64 头部 (data:image/png;base64,...)
             if "," in ref_image_b64:
                 ref_image_b64 = ref_image_b64.split(",")[1]
             
-            # 2. 解码为 bytes
             image_bytes = base64.b64decode(ref_image_b64)
-            
-            # 3. 使用 Pillow 读取以验证图片有效性 (可选，但推荐)
-            image_pil = Image.open(io.BytesIO(image_bytes))
-            
-            # 4. 将图片封装为 Google SDK 支持的格式
-            # 注意：这里取决于具体模型是否支持 input_image。
-            # 如果是 Imagen 3，通常通过 edit 或 variation 接口，但这里我们尝试通用的 generate_content 多模态输入
-            contents_payload.append(image_pil)
+            pil_image = Image.open(io.BytesIO(image_bytes))
 
-            # 修改提示词，强化指令
-            # 这一步是为了让 AI 知道图片是用来做什么的
-            contents_payload[0] = f"Based on the input product image, generate: {prompt}"
+        # 2. 初始化客户端
+        client = genai.Client(api_key=api_key, http_options={'api_version': 'v1alpha'})
 
-        # 调用生成
-        # 注意：请确保你的 model 支持图像输入。
-        # 如果是 Imagen 3，目前主要支持 Text-to-Image。
-        # 如果使用 Gemini 2.0 Flash 等多模态模型，它通常是生成文本。
-        # 这里假设你拥有访问支持图生图的模型权限。
+        # 3. 构造 contents 列表 (官方文档核心要求：[文本, 图片])
+        # 我们在这里优化一下 Prompt，使其更适合“虚拟试穿”场景
+        final_prompt = user_prompt
+        if pil_image:
+             # 如果有图，则组合：[Prompt, Image]
+             # 提示词增强：告诉 AI 基于这张图来生成
+             contents_payload = [final_prompt, pil_image]
+        else:
+             # 如果没图，仅发送文本
+             contents_payload = [final_prompt]
+
+        # 4. 调用模型
+        # 根据文档，推荐使用 'gemini-2.5-flash-image' (快速) 或 'gemini-3-pro-image-preview' (专业/高质量)
+        # 对于产品图生图，建议优先尝试 Gemini 3 Pro，因为它对指令遵循度更高
+        model_name = "gemini-2.5-flash-image" 
+        
+        # 这里的 config 用于设置图片比例等，不再设置 response_mime_type
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp", # 建议尝试支持多模态更强的模型，或者原来的 gemini-2.5-flash-image
+            model=model_name,
             contents=contents_payload,
             config=types.GenerateContentConfig(
-                response_mime_type="image/png" # 强制要求返回图片（如果是 Gemini 模型）
+                image_config=types.ImageConfig(
+                    aspect_ratio="1:1" # 可以是 "3:4", "16:9" 等
+                )
             )
         )
 
-        # 处理返回数据
-        # 不同的模型返回结构可能不同，这里保留原本的逻辑，并增加容错
-        if response.candidates and response.candidates[0].content.parts:
+        # 5. 处理返回结果
+        # 官方文档写法：遍历 parts，寻找 inline_data
+        if response.candidates:
             for part in response.candidates[0].content.parts:
+                # 检查是否有图像数据
                 if hasattr(part, 'inline_data') and part.inline_data:
-                    img_b64 = base64.b64encode(part.inline_data.data).decode('utf-8')
-                    return {"image": img_b64}
+                    # 获取原生 bytes 数据
+                    raw_img_data = part.inline_data.data
+                    # 转回 base64 发给前端
+                    img_b64_str = base64.b64encode(raw_img_data).decode('utf-8')
+                    return {"image": img_b64_str}
         
-        # 如果没有直接的 inline_data，可能是生成的链接或其他格式，视具体模型而定
-        return JSONResponse({"error": "模型未返回图像数据，请检查模型是否支持该功能"}, status_code=500)
+        return JSONResponse({"error": "模型生成完成，但未返回图像数据。可能被安全策略拦截。"}, status_code=500)
 
     except Exception as e:
         import traceback
-        print(traceback.format_exc()) # 打印错误日志到 Vercel 后台
+        print(traceback.format_exc())
         return JSONResponse({"error": f"后端错误: {str(e)}"}, status_code=500)
