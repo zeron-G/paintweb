@@ -3,113 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nano Banana - AI Painter</title>
+    <title>Nano Banana - 产品试穿 AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-zinc-900 text-zinc-100 min-h-screen p-6">
-    <div class="max-w-xl mx-auto space-y-6">
-        <header class="text-center py-8">
-            <h1 class="text-4xl font-black text-yellow-400">🍌 NANO BANANA</h1>
-            <p class="text-zinc-400 mt-2">AI 产品模特生成器</p>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 font-sans">
+    <div class="max-w-2xl mx-auto space-y-8">
+        <header class="text-center pt-10 pb-6">
+            <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">NANO BANANA</h1>
+            <p class="text-zinc-500 mt-3 text-lg">基于 Gemini Image 的产品图生图工具</p>
         </header>
 
-        <div class="bg-zinc-800 p-6 rounded-2xl border border-zinc-700 shadow-2xl">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Google API Key</label>
-                    <input type="password" id="apiKey" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 outline-none focus:border-yellow-400 transition" placeholder="在此粘贴你的密钥...">
-                </div>
+        <div class="bg-zinc-900/50 backdrop-blur-sm p-8 rounded-3xl border border-zinc-800 shadow-2xl space-y-6">
+            
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Google API Key</label>
+                <input type="password" id="apiKey" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 outline-none focus:border-yellow-500 transition text-zinc-300" placeholder="粘贴你的 Gemini API Key...">
+            </div>
 
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">上传产品图 (可选)</label>
-                    <div class="relative group">
-                        <input type="file" id="refImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="previewImage()">
-                        <div id="uploadBox" class="w-full bg-zinc-900 border border-dashed border-zinc-600 rounded-lg p-4 text-center text-zinc-400 group-hover:border-yellow-400 group-hover:text-yellow-400 transition flex items-center justify-center min-h-[60px]">
-                            <span id="uploadText">点击上传产品照片...</span>
-                            <img id="preview" class="hidden max-h-32 rounded border border-zinc-700 mx-auto">
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">参考产品图</label>
+                <div class="relative group cursor-pointer">
+                    <input type="file" id="refImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 z-20 cursor-pointer" onchange="handleImageUpload()">
+                    
+                    <div id="uploadBox" class="w-full bg-zinc-950 border-2 border-dashed border-zinc-800 rounded-xl p-6 text-center transition-all group-hover:border-yellow-500/50 group-hover:bg-zinc-900 flex flex-col items-center justify-center min-h-[160px]">
+                        <div id="uploadPlaceholder" class="space-y-2">
+                            <div class="text-4xl">📸</div>
+                            <div class="text-zinc-400 font-medium">点击上传产品照片</div>
+                            <div class="text-zinc-600 text-sm">支持 JPG, PNG (建议小于 4MB)</div>
                         </div>
+                        <img id="preview" class="hidden max-h-64 rounded-lg shadow-lg object-contain z-10">
                     </div>
                 </div>
-
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">生成描述</label>
-                    <textarea id="prompt" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 outline-none focus:border-yellow-400 transition h-24" placeholder="例如：一个时尚的亚洲女模特正在街头佩戴这款产品..."></textarea>
-                </div>
-
-                <button onclick="draw()" id="btn" class="w-full bg-yellow-400 hover:bg-yellow-500 text-zinc-900 font-black py-4 rounded-xl transition-all transform active:scale-95">
-                    立即生成图片
-                </button>
             </div>
+
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">生成指令</label>
+                <textarea id="prompt" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 outline-none focus:border-yellow-500 transition h-32 resize-none text-zinc-300" placeholder="例如：一位专业的欧美模特正在街头佩戴这款墨镜，阳光明媚，时尚杂志风格..."></textarea>
+            </div>
+
+            <button onclick="generate()" id="btn" class="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-300 hover:to-orange-400 text-zinc-950 font-black py-4 rounded-xl transition-all transform active:scale-[0.98] shadow-lg shadow-orange-500/20 text-lg">
+                开始生成
+            </button>
         </div>
 
-        <div id="display" class="relative group mt-6">
-        </div>
+        <div id="display" class="empty:hidden rounded-3xl overflow-hidden border border-zinc-800 shadow-2xl bg-black"></div>
     </div>
 
     <script>
-        // 初始化：从本地读取 Key
+        // 初始化 Key
         document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
         let base64Image = null;
 
-        // 图片预览处理
-        function previewImage() {
+        function handleImageUpload() {
             const file = document.getElementById('refImage').files[0];
             const preview = document.getElementById('preview');
-            const uploadText = document.getElementById('uploadText');
+            const placeholder = document.getElementById('uploadPlaceholder');
             
             if (file) {
+                // 限制大小，Vercel 限制请求体 4.5MB
+                if (file.size > 4 * 1024 * 1024) {
+                    alert("图片太大，请上传小于 4MB 的图片");
+                    return;
+                }
+
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
                     preview.classList.remove('hidden');
-                    uploadText.classList.add('hidden');
-                    base64Image = e.target.result; // 保存 Base64 供发送
+                    placeholder.classList.add('hidden');
+                    base64Image = e.target.result;
                 }
                 reader.readAsDataURL(file);
             }
         }
 
-        async function draw() {
+        async function generate() {
             const apiKey = document.getElementById('apiKey').value;
             const prompt = document.getElementById('prompt').value;
             const btn = document.getElementById('btn');
             const display = document.getElementById('display');
 
-            if (!apiKey || !prompt) return alert('请填写 API Key 和描述');
+            if (!apiKey) return alert('请填写 API Key');
+            if (!prompt && !base64Image) return alert('请至少填写描述或上传图片');
 
-            // 保存 Key
             localStorage.setItem('gemini_key', apiKey);
-
+            
+            // UI 状态更新
             btn.disabled = true;
-            btn.innerText = '正在生成中...';
-            display.innerHTML = '<div class="h-64 flex items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-700 rounded-2xl italic animate-pulse">AI 正在构思画面...</div>';
+            btn.innerText = 'AI 正在构思 (约10-20秒)...';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            display.innerHTML = `
+                <div class="h-96 flex flex-col items-center justify-center text-zinc-500 space-y-4 animate-pulse">
+                    <div class="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p>正在连接 Google Gemini Image 模型...</p>
+                </div>
+            `;
+            display.style.display = 'block';
 
             try {
-                // 构建请求体
-                const payload = { apiKey, prompt };
-                if (base64Image) {
-                    payload.image = base64Image;
-                }
-
                 const res = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ 
+                        apiKey, 
+                        prompt, 
+                        image: base64Image 
+                    })
                 });
                 
                 const data = await res.json();
 
                 if (data.image) {
-                    display.innerHTML = `<img src="data:image/png;base64,${data.image}" class="w-full rounded-2xl shadow-2xl border-4 border-zinc-800">
-                    <a href="data:image/png;base64,${data.image}" download="generated.png" class="block text-center text-zinc-500 mt-2 hover:text-white">下载图片</a>`;
+                    display.innerHTML = `
+                        <div class="relative group">
+                            <img src="data:image/png;base64,${data.image}" class="w-full h-auto">
+                            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-4">
+                                <a href="data:image/png;base64,${data.image}" download="nano-banana-gen.png" class="bg-white text-black px-6 py-2 rounded-full font-bold hover:bg-yellow-400 transition">下载图片</a>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    display.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-500/50 text-red-400 rounded-lg text-sm">生成失败: ${data.error}</div>`;
+                    throw new Error(data.error || '未知错误');
                 }
             } catch (e) {
-                display.innerHTML = `<div class="text-red-500 text-center">网络请求错误: ${e.message}</div>`;
+                display.innerHTML = `
+                    <div class="p-8 text-center text-red-400 bg-red-950/30">
+                        <p class="font-bold text-lg mb-2">生成失败</p>
+                        <p class="text-sm opacity-80">${e.message}</p>
+                    </div>
+                `;
             } finally {
                 btn.disabled = false;
-                btn.innerText = '立即生成图片';
+                btn.innerText = '开始生成';
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
     </script>
